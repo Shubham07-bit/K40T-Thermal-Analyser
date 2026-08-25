@@ -38,6 +38,10 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND EXISTS "${SDK_LIB_WIN_DLLA}")
     set(SDK_INCLUDE "${SDK_INCLUDE_WIN}")
     set(SDK_LIB "${SDK_LIB_WIN_DLLA}")
     set(WITH_BLST_SDK ON)
+elseif(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND EXISTS "${SDK_LIB_WIN_MSVC}" AND CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
+    set(SDK_INCLUDE "${SDK_INCLUDE_WIN}")
+    set(SDK_LIB "${SDK_LIB_WIN_MSVC}")
+    set(WITH_BLST_SDK ON)
 elseif(NOT CMAKE_SYSTEM_NAME STREQUAL "Windows" AND EXISTS "${SDK_LIB_LINUX}")
     set(SDK_INCLUDE "${SDK_INCLUDE_LINUX}")
     set(SDK_LIB "${SDK_LIB_LINUX}")
@@ -46,7 +50,7 @@ else()
     set(WITH_BLST_SDK OFF)
 endif()
 
-if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND EXISTS "${SDK_LIB_WIN_MSVC}")
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows" AND EXISTS "${SDK_LIB_WIN_MSVC}" AND NOT CMAKE_CXX_COMPILER_ID STREQUAL "MSVC")
     message(WARNING "Found lib/windows-x86_64/blstsdk64.lib, but it is an MSVC static library and cannot be linked by MinGW. "
                     "K40T IR JPEG support will be disabled on Windows for the MinGW build. "
                     "Provide lib/windows-x86_64/libblstsdk64.a (static) or "
@@ -94,12 +98,21 @@ if(WITH_BLST_SDK)
     target_link_libraries(${PROJECT_NAME} PRIVATE ${SDK_LIB})
 endif()
 
+if(WIN32 AND WITH_BLST_SDK)
+    # The BLST SDK networking/serial modules need Winsock and setup APIs.
+    target_link_libraries(${PROJECT_NAME} PRIVATE ws2_32 winmm setupapi)
+endif()
+
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Core
     Qt6::Gui
     Qt6::Widgets
-    m
 )
+
+# libm is part of the MSVC C runtime, so only link it on Unix.
+if(NOT WIN32)
+    target_link_libraries(${PROJECT_NAME} PRIVATE m)
+endif()
 
 set_target_properties(${PROJECT_NAME} PROPERTIES
     WIN32_EXECUTABLE FALSE

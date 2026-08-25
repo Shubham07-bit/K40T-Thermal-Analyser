@@ -43,7 +43,7 @@ jobs:
           wget -q -O linuxdeployqt.AppImage https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
           chmod +x linuxdeployqt.AppImage
           ./linuxdeployqt.AppImage --appimage-extract
-          ./squashfs-root/AppRun AppDir/usr/bin/thermal_analyzer -qmake="$Qt6_DIR/bin/qmake" -appimage
+          ./squashfs-root/AppRun AppDir/usr/bin/thermal_analyzer -qmake="$QT_ROOT_DIR/bin/qmake" -appimage
 
       - name: Upload Linux AppImage
         uses: actions/upload-artifact@v4
@@ -73,14 +73,14 @@ jobs:
 
       - name: Build
         run: |
-          cmake -B build -S . -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="$env:Qt6_DIR"
+          cmake -B build -S . -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="$env:QT_ROOT_DIR"
           cmake --build build --config Release
 
       - name: Deploy
         run: |
           New-Item -ItemType Directory -Force -Path deploy-windows
           Copy-Item build\Release\thermal_analyzer.exe deploy-windows\
-          & "$env:Qt6_DIR\bin\windeployqt.exe" deploy-windows\thermal_analyzer.exe --release --no-translations --compiler-runtime
+          & "$env:QT_ROOT_DIR\bin\windeployqt.exe" deploy-windows\thermal_analyzer.exe --release --no-translations --compiler-runtime
 
       - name: Zip
         run: Compress-Archive -Path deploy-windows\* -DestinationPath K40T_Thermal_Analyser-windows-x86_64.zip
