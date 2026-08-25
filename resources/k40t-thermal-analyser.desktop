@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=K40T Thermal Analyser
+Comment=Thermal image analysis tool for K40T IR cameras
+Exec=thermal_analyzer %F
+Icon=k40t-thermal-analyser
+Terminal=false
+Categories=Graphics;Science;

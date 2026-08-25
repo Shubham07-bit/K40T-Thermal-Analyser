@@ -1,0 +1,90 @@
+name: Build K40T Thermal Analyser
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: 'linux'
+          target: 'desktop'
+          arch: 'linux_gcc_64'
+          cache: true
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libgl1-mesa-dev libxkbcommon-x11-0 patchelf
+
+      - name: Build
+        run: |
+          cmake -B build -S . -DCMAKE_BUILD_TYPE=Release
+          cmake --build build -j$(nproc)
+
+      - name: Package AppImage
+        run: |
+          rm -rf AppDir
+          mkdir -p AppDir/usr/bin
+          cp build/thermal_analyzer AppDir/usr/bin/
+          cp resources/k40t-thermal-analyser.png AppDir/
+          cp resources/k40t-thermal-analyser.desktop AppDir/
+          wget -q -O linuxdeployqt.AppImage https://github.com/probonopd/linuxdeployqt/releases/download/continuous/linuxdeployqt-continuous-x86_64.AppImage
+          chmod +x linuxdeployqt.AppImage
+          ./linuxdeployqt.AppImage --appimage-extract
+          ./squashfs-root/AppRun AppDir/usr/bin/thermal_analyzer -qmake="$Qt6_DIR/bin/qmake" -appimage
+
+      - name: Upload Linux AppImage
+        uses: actions/upload-artifact@v4
+        with:
+          name: K40T_Thermal_Analyser-linux-x86_64
+          path: K40T_Thermal_Analyser*.AppImage
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '6.8.3'
+          host: 'windows'
+          target: 'desktop'
+          arch: 'win64_msvc2022_64'
+          cache: true
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+
+      - name: Build
+        run: |
+          cmake -B build -S . -G "Visual Studio 17 2022" -A x64 -DCMAKE_PREFIX_PATH="$env:Qt6_DIR"
+          cmake --build build --config Release
+
+      - name: Deploy
+        run: |
+          New-Item -ItemType Directory -Force -Path deploy-windows
+          Copy-Item build\Release\thermal_analyzer.exe deploy-windows\
+          & "$env:Qt6_DIR\bin\windeployqt.exe" deploy-windows\thermal_analyzer.exe --release --no-translations --compiler-runtime
+
+      - name: Zip
+        run: Compress-Archive -Path deploy-windows\* -DestinationPath K40T_Thermal_Analyser-windows-x86_64.zip
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: K40T_Thermal_Analyser-windows-x86_64
+          path: K40T_Thermal_Analyser-windows-x86_64.zip

@@ -1,0 +1,45 @@
+# Build directories
+/build/
+/build-*/
+/out/
+/AppDir/
+/deploy-*/
+
+# Qt / CMake user files
+CMakeLists.txt.user
+CMakeCache.txt
+.cmake/
+*.pro.user
+*.pro.user.*
+
+# Generated binaries
+*.exe
+*.dll
+*.so
+*.a
+*.lib
+*.AppImage
+*.zip
+*.tar.gz
+*.tar.bz2
+
+# Logs
+*.log
+
+# Local Qt installations (should not be committed)
+/windows-qt/
+/Qt*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Temporary overlay exports
+*_overlay.png
