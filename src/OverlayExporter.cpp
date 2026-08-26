@@ -5,6 +5,7 @@
 OverlayExporter::Result OverlayExporter::render(const ThermalDataModel &data,
                                                 ColorMap::Palette palette,
                                                 const QList<QPoint> &points,
+                                                const QList<ThermalBox> &boxes,
                                                 OverlayFlagSet flags,
                                                 std::optional<float> min,
                                                 std::optional<float> max,
@@ -72,6 +73,25 @@ OverlayExporter::Result OverlayExporter::render(const ThermalDataModel &data,
             painter.drawText(p.x() + 12, p.y() - 8,
                              QString("P%1: %2C").arg(i + 1).arg(t, 0, 'f', 1));
             painter.setPen(pen);
+        }
+    }
+
+    // Measurement boxes are always drawn if any exist.
+    if (!boxes.isEmpty()) {
+        QPen boxPen(QColor(0, 200, 0));
+        boxPen.setWidth(3);
+        painter.setPen(boxPen);
+        painter.setBrush(QBrush(QColor(0, 200, 0, 40)));
+
+        for (int i = 0; i < boxes.size(); ++i) {
+            const ThermalBox &b = boxes[i];
+            painter.drawRect(b.rect);
+            painter.drawText(b.rect.x() + 12, b.rect.y() - 8,
+                             QString("B%1: avg %2C, min %3C, max %4C")
+                                 .arg(i + 1)
+                                 .arg(b.avgTemperature, 0, 'f', 1)
+                                 .arg(b.minTemperature, 0, 'f', 1)
+                                 .arg(b.maxTemperature, 0, 'f', 1));
         }
     }
 

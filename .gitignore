@@ -23,6 +23,10 @@ CMakeCache.txt
 *.tar.gz
 *.tar.bz2
 
+# But keep bundled third-party SDK libraries under lib/
+!lib/**/*.a
+!lib/**/*.lib
+
 # Logs
 *.log
 

@@ -161,8 +161,36 @@
          </layout>
         </item>
        </layout>
-      </widget>
-       <widget class="QGroupBox" name="metadataGroup">
+       </widget>
+       <widget class="QGroupBox" name="boxesGroup">
+        <property name="title">
+         <string>Measurement Boxes</string>
+        </property>
+        <layout class="QVBoxLayout" name="boxesLayout">
+         <item>
+          <widget class="QListWidget" name="boxesList"/>
+         </item>
+         <item>
+          <layout class="QHBoxLayout" name="boxesButtonLayout">
+           <item>
+            <widget class="QPushButton" name="removeLastBoxButton">
+             <property name="text">
+              <string>Remove Last</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <widget class="QPushButton" name="clearBoxesButton">
+             <property name="text">
+              <string>Clear All</string>
+             </property>
+            </widget>
+           </item>
+          </layout>
+         </item>
+        </layout>
+       </widget>
+        <widget class="QGroupBox" name="metadataGroup">
         <property name="title">
          <string>Metadata</string>
         </property>
@@ -218,6 +246,7 @@
      <string>File</string>
     </property>
     <addaction name="actionOpen"/>
+    <addaction name="actionOpenFolder"/>
     <addaction name="separator"/>
     <addaction name="actionExport"/>
     <addaction name="separator"/>
@@ -225,24 +254,28 @@
     <addaction name="separator"/>
     <addaction name="actionExit"/>
    </widget>
-   <widget class="QMenu" name="menuView">
-    <property name="title">
-     <string>View</string>
-    </property>
-    <addaction name="actionZoomIn"/>
-    <addaction name="actionZoomOut"/>
-    <addaction name="actionResetZoom"/>
-    <addaction name="separator"/>
-    <addaction name="actionToggleMinMax"/>
-    <addaction name="actionToggleCrosshair"/>
-    <addaction name="separator"/>
-    <addaction name="actionViewList"/>
-    <addaction name="actionViewGrid"/>
-    <addaction name="actionViewThumbnails"/>
-    <addaction name="separator"/>
-    <addaction name="actionRemoveLastPoint"/>
-    <addaction name="actionClearPoints"/>
-   </widget>
+    <widget class="QMenu" name="menuView">
+     <property name="title">
+      <string>View</string>
+     </property>
+     <addaction name="actionZoomIn"/>
+     <addaction name="actionZoomOut"/>
+     <addaction name="actionResetZoom"/>
+     <addaction name="separator"/>
+     <addaction name="actionToggleMinMax"/>
+     <addaction name="actionToggleCrosshair"/>
+     <addaction name="separator"/>
+     <addaction name="actionDrawBox"/>
+     <addaction name="actionRemoveLastBox"/>
+     <addaction name="actionClearBoxes"/>
+     <addaction name="separator"/>
+     <addaction name="actionViewList"/>
+     <addaction name="actionViewGrid"/>
+     <addaction name="actionViewThumbnails"/>
+     <addaction name="separator"/>
+     <addaction name="actionRemoveLastPoint"/>
+     <addaction name="actionClearPoints"/>
+    </widget>
    <widget class="QMenu" name="menuHelp">
     <property name="title">
      <string>Help</string>
@@ -264,6 +297,7 @@
     <bool>false</bool>
    </attribute>
    <addaction name="actionOpen"/>
+   <addaction name="actionOpenFolder"/>
    <addaction name="separator"/>
    <addaction name="actionExport"/>
    <addaction name="separator"/>
@@ -277,6 +311,14 @@
    </property>
    <property name="shortcut">
     <string>Ctrl+O</string>
+   </property>
+  </action>
+  <action name="actionOpenFolder">
+   <property name="text">
+    <string>Open Folder...</string>
+   </property>
+   <property name="shortcut">
+    <string>Ctrl+Shift+O</string>
    </property>
   </action>
   <action name="actionExport">
@@ -347,6 +389,24 @@
   <action name="actionClearPoints">
    <property name="text">
     <string>Clear All Points</string>
+   </property>
+  </action>
+  <action name="actionDrawBox">
+   <property name="text">
+    <string>Draw Box</string>
+   </property>
+   <property name="checkable">
+    <bool>true</bool>
+   </property>
+  </action>
+  <action name="actionRemoveLastBox">
+   <property name="text">
+    <string>Remove Last Box</string>
+   </property>
+  </action>
+  <action name="actionClearBoxes">
+   <property name="text">
+    <string>Clear All Boxes</string>
    </property>
   </action>
   <action name="actionViewList">

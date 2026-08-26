@@ -8,6 +8,8 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QDir>
+#include <QDragEnterEvent>
+#include <QDropEvent>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -15,10 +17,24 @@
 #include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
+#include <QMimeData>
 #include <QPushButton>
 #include <QModelIndex>
+#include <QSet>
 #include <QStandardItemModel>
+#include <QTextStream>
+#include <QUrl>
 #include <QVBoxLayout>
+
+#include <functional>
+#include <limits>
+
+static const QStringList &supportedImageExtensions()
+{
+    static const QStringList extensions = QStringList()
+        << "jpg" << "jpeg" << "png" << "tif" << "tiff";
+    return extensions;
+}
 
 #include "BatchProcessor.h"
 #ifdef WITH_BLST_SDK
@@ -57,6 +73,8 @@ MainWindow::MainWindow(QWidget *parent)
     m_imageView = new ImageView(this);
     ui->imageFrameLayout->addWidget(m_imageView);
 
+    setAcceptDrops(true);
+
     setupUi();
     connectSignals();
 }
@@ -94,6 +112,9 @@ void MainWindow::setupUi()
     ui->maxSpin->setEnabled(false);
     ui->autoRangeButton->setEnabled(false);
 
+    // Limit zoom range.
+    m_imageView->setZoomRange(0.05, 20.0);
+
     // Delete-key / context-menu action to remove the selected image.
     QAction *removeImageAction = new QAction(tr("Remove Image"), this);
     removeImageAction->setShortcut(QKeySequence::Delete);
@@ -130,6 +151,7 @@ void MainWindow::connectSignals()
     connect(m_imageView, &ImageView::pixelClicked, this, &MainWindow::on_pixelClicked);
     connect(m_imageView, &ImageView::minMaxChanged, this, &MainWindow::on_minMaxChanged);
     connect(m_imageView, &ImageView::userPointsChanged, this, &MainWindow::on_userPointsChanged);
+    connect(m_imageView, &ImageView::boxDrawn, this, &MainWindow::on_boxDrawn);
 
     connect(&m_batchProcessor, &BatchProcessor::fileLoaded, this, &MainWindow::on_batchFileLoaded);
     connect(&m_batchProcessor, &BatchProcessor::fileFailed, this, &MainWindow::on_batchFileFailed);
@@ -139,6 +161,43 @@ void MainWindow::connectSignals()
 void MainWindow::loadFile(const QString &filePath)
 {
     loadFiles(QStringList() << filePath);
+}
+
+QStringList MainWindow::collectImageFiles(const QStringList &paths) const
+{
+    QStringList result;
+    QSet<QString> seen;
+
+    std::function<void(const QString&)> scan = [&](const QString &path) {
+        QFileInfo fi(path);
+        if (!fi.exists())
+            return;
+
+        if (fi.isFile()) {
+            const QString ext = fi.suffix().toLower();
+            if (supportedImageExtensions().contains(ext)) {
+                const QString abs = fi.absoluteFilePath();
+                if (!seen.contains(abs)) {
+                    seen.insert(abs);
+                    result << abs;
+                }
+            }
+        } else if (fi.isDir()) {
+            QDir dir(path);
+            for (const QFileInfo &child : dir.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot)) {
+                if (child.isDir()) {
+                    scan(child.absoluteFilePath());
+                } else {
+                    scan(child.absoluteFilePath());
+                }
+            }
+        }
+    };
+
+    for (const QString &path : paths)
+        scan(path);
+
+    return result;
 }
 
 void MainWindow::loadFiles(const QStringList &filePaths)
@@ -161,7 +220,17 @@ void MainWindow::on_actionOpen_triggered()
     if (files.isEmpty())
         return;
 
-    loadFiles(files);
+    loadFiles(collectImageFiles(files));
+}
+
+void MainWindow::on_actionOpenFolder_triggered()
+{
+    const QString dir = QFileDialog::getExistingDirectory(
+        this, tr("Open Folder with Images"));
+    if (dir.isEmpty())
+        return;
+
+    loadFiles(collectImageFiles(QStringList() << dir));
 }
 
 void MainWindow::on_actionGenerateTestImage_triggered()
@@ -211,6 +280,21 @@ void MainWindow::on_actionToggleCrosshair_triggered()
     m_imageView->setShowCrosshair(ui->actionToggleCrosshair->isChecked());
 }
 
+void MainWindow::on_actionDrawBox_toggled(bool checked)
+{
+    m_imageView->setBoxDrawingMode(checked);
+}
+
+void MainWindow::on_actionRemoveLastBox_triggered()
+{
+    on_removeLastBoxButton_clicked();
+}
+
+void MainWindow::on_actionClearBoxes_triggered()
+{
+    on_clearBoxesButton_clicked();
+}
+
 void MainWindow::on_actionViewList_triggered()
 {
     setFileListViewMode(QListWidget::ListMode, false);
@@ -247,9 +331,14 @@ void MainWindow::on_actionExport_triggered()
         if (outputPath.isEmpty())
             return;
 
-        QString err = exportModel(m_models[idx], m_imagePoints[idx], outputPath,
+        QString err = exportModel(m_models[idx], m_imagePoints[idx], m_imageBoxes[idx], outputPath,
                                   OverlayExporter::AllOverlays);
         if (err.isEmpty()) {
+            const QString csvPath = QFileInfo(outputPath).path() + "/" + QFileInfo(outputPath).completeBaseName() + ".csv";
+            QString csvErr = writeCsv(m_models[idx], m_imagePoints[idx], m_imageBoxes[idx], csvPath);
+            if (!csvErr.isEmpty()) {
+                addLogMessage(tr("CSV export failed: %1").arg(csvErr));
+            }
             addLogMessage(tr("Exported image to %1").arg(outputPath));
             ui->statusLabel->setText(tr("Exported to %1").arg(outputPath));
         } else {
@@ -269,10 +358,13 @@ void MainWindow::on_actionExport_triggered()
 
         for (int idx : selectedIndices) {
             const ThermalDataModel &model = m_models[idx];
-            const QString outputPath = dir + "/" + QFileInfo(model.fileName()).completeBaseName() + "_overlay.png";
-            QString err = exportModel(model, m_imagePoints[idx], outputPath,
+            const QString baseName = QFileInfo(model.fileName()).completeBaseName();
+            const QString outputPath = dir + "/" + baseName + "_overlay.png";
+            QString err = exportModel(model, m_imagePoints[idx], m_imageBoxes[idx], outputPath,
                                       OverlayExporter::AllOverlays);
             if (err.isEmpty()) {
+                const QString csvPath = dir + "/" + baseName + "_overlay.csv";
+                writeCsv(model, m_imagePoints[idx], m_imageBoxes[idx], csvPath);
                 ++success;
             } else {
                 ++failed;
@@ -344,6 +436,26 @@ void MainWindow::on_removeLastPointButton_clicked()
     m_imageView->removeLastUserPoint();
 }
 
+void MainWindow::on_clearBoxesButton_clicked()
+{
+    int idx = ui->fileList->currentRow();
+    if (idx >= 0 && idx < m_imageBoxes.size()) {
+        m_imageBoxes[idx].clear();
+        applyBoxesToView(idx);
+        updateBoxesList();
+    }
+}
+
+void MainWindow::on_removeLastBoxButton_clicked()
+{
+    int idx = ui->fileList->currentRow();
+    if (idx >= 0 && idx < m_imageBoxes.size() && !m_imageBoxes[idx].isEmpty()) {
+        m_imageBoxes[idx].removeLast();
+        applyBoxesToView(idx);
+        updateBoxesList();
+    }
+}
+
 void MainWindow::on_viewMatrixButton_clicked()
 {
     int idx = ui->fileList->currentRow();
@@ -366,6 +478,30 @@ void MainWindow::on_fileList_customContextMenuRequested(const QPoint &pos)
         ui->fileList->setCurrentRow(idx);
         removeCurrentImage();
     }
+}
+
+void MainWindow::dragEnterEvent(QDragEnterEvent *event)
+{
+    if (event->mimeData()->hasUrls()) {
+        event->acceptProposedAction();
+    } else {
+        event->ignore();
+    }
+}
+
+void MainWindow::dropEvent(QDropEvent *event)
+{
+    const QList<QUrl> urls = event->mimeData()->urls();
+    QStringList paths;
+    for (const QUrl &url : urls) {
+        if (url.isLocalFile())
+            paths << url.toLocalFile();
+    }
+
+    if (!paths.isEmpty()) {
+        loadFiles(collectImageFiles(paths));
+    }
+    event->acceptProposedAction();
 }
 
 void MainWindow::on_fileList_currentRowChanged(int currentRow)
@@ -412,6 +548,7 @@ void MainWindow::on_batchFileLoaded(int index, const ThermalDataModel &model)
     Q_UNUSED(index)
     m_models.append(model);
     m_imagePoints.append(QList<QPoint>());
+    m_imageBoxes.append(QList<ThermalBox>());
 
     const int newIndex = m_models.size() - 1;
     QListWidgetItem *item = new QListWidgetItem(model.fileName());
@@ -491,6 +628,8 @@ void MainWindow::displayModel(int index)
 
     refreshImage();
     applyPointsToView(index);
+    applyBoxesToView(index);
+    updateBoxesList();
 }
 
 void MainWindow::updateMetadataPanel(const ThermalDataModel &data)
@@ -572,6 +711,7 @@ void MainWindow::generateSyntheticImage()
 
     m_models.clear();
     m_imagePoints.clear();
+    m_imageBoxes.clear();
     m_currentModelIndex = -1;
     invalidateThumbnailCache();
     ui->fileList->clear();
@@ -579,6 +719,7 @@ void MainWindow::generateSyntheticImage()
 
     m_models.append(model);
     m_imagePoints.append(QList<QPoint>());
+    m_imageBoxes.append(QList<ThermalBox>());
 
     QListWidgetItem *item = new QListWidgetItem(model.fileName());
     item->setIcon(thumbnailIconForIndex(0));
@@ -588,8 +729,11 @@ void MainWindow::generateSyntheticImage()
     addLogMessage(tr("Generated synthetic %1x%2 thermal image.").arg(w).arg(h));
 }
 
-QString MainWindow::exportModel(const ThermalDataModel &model, const QList<QPoint> &points,
-                                const QString &outputPath, OverlayExporter::OverlayFlagSet flags)
+QString MainWindow::exportModel(const ThermalDataModel &model,
+                                const QList<QPoint> &points,
+                                const QList<ThermalBox> &boxes,
+                                const QString &outputPath,
+                                OverlayExporter::OverlayFlagSet flags)
 {
     ColorMap::Palette palette = m_rawMode ? ColorMap::RawGrayscale : m_currentPalette;
 
@@ -600,8 +744,129 @@ QString MainWindow::exportModel(const ThermalDataModel &model, const QList<QPoin
     }
 
     OverlayExporter::Result result = OverlayExporter::render(
-        model, palette, points, flags, m_manualMin, m_manualMax, baseImage);
+        model, palette, points, boxes, flags, m_manualMin, m_manualMax, baseImage);
     return OverlayExporter::save(result, outputPath);
+}
+
+QString MainWindow::writeCsv(const ThermalDataModel &model,
+                             const QList<QPoint> &points,
+                             const QList<ThermalBox> &boxes,
+                             const QString &csvPath)
+{
+    QFile file(csvPath);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Text))
+        return tr("Could not open %1 for writing").arg(csvPath);
+
+    QTextStream out(&file);
+    out << "Image,Width,Height,Min_C,Max_C\n";
+    out << model.fileName() << ","
+        << model.width() << ","
+        << model.height() << ","
+        << QString::number(model.minTemperature(), 'f', 2) << ","
+        << QString::number(model.maxTemperature(), 'f', 2) << "\n";
+
+    out << "\nType,ID,X,Y,Width,Height,Avg_C,Min_C,Max_C\n";
+
+    for (int i = 0; i < points.size(); ++i) {
+        const QPoint p = points[i];
+        const float t = model.temperatureAt(p.x(), p.y());
+        out << "Point,P" << (i + 1) << ","
+            << p.x() << "," << p.y() << ",,,"
+            << QString::number(t, 'f', 2) << ",,\n";
+    }
+
+    for (int i = 0; i < boxes.size(); ++i) {
+        const ThermalBox &b = boxes[i];
+        out << "Box,B" << (i + 1) << ","
+            << b.rect.x() << "," << b.rect.y() << ","
+            << b.rect.width() << "," << b.rect.height() << ","
+            << QString::number(b.avgTemperature, 'f', 2) << ","
+            << QString::number(b.minTemperature, 'f', 2) << ","
+            << QString::number(b.maxTemperature, 'f', 2) << "\n";
+    }
+
+    file.close();
+    return QString();
+}
+
+ThermalBox MainWindow::computeBoxStats(const QRect &rect) const
+{
+    ThermalBox box;
+    box.rect = rect;
+
+    int idx = ui->fileList->currentRow();
+    if (idx < 0 || idx >= m_models.size() || !m_models[idx].isValid())
+        return box;
+
+    const ThermalDataModel &model = m_models[idx];
+    const QRect r = rect.intersected(QRect(0, 0, model.width(), model.height()));
+    if (r.isEmpty())
+        return box;
+
+    double sum = 0.0;
+    float minT = std::numeric_limits<float>::max();
+    float maxT = std::numeric_limits<float>::lowest();
+    int count = 0;
+
+    for (int y = r.top(); y <= r.bottom(); ++y) {
+        for (int x = r.left(); x <= r.right(); ++x) {
+            const float t = model.temperatureAt(x, y);
+            sum += t;
+            if (t < minT) minT = t;
+            if (t > maxT) maxT = t;
+            ++count;
+        }
+    }
+
+    if (count > 0) {
+        box.avgTemperature = static_cast<float>(sum / count);
+        box.minTemperature = minT;
+        box.maxTemperature = maxT;
+    }
+
+    return box;
+}
+
+void MainWindow::on_boxDrawn(const QRect &rect)
+{
+    int idx = ui->fileList->currentRow();
+    if (idx < 0 || idx >= m_imageBoxes.size())
+        return;
+
+    ThermalBox box = computeBoxStats(rect);
+    if (box.rect.width() > 0 && box.rect.height() > 0) {
+        m_imageBoxes[idx].append(box);
+        applyBoxesToView(idx);
+        updateBoxesList();
+    }
+}
+
+void MainWindow::updateBoxesList()
+{
+    ui->boxesList->clear();
+    int idx = ui->fileList->currentRow();
+    if (idx < 0 || idx >= m_imageBoxes.size())
+        return;
+
+    for (int i = 0; i < m_imageBoxes[idx].size(); ++i) {
+        const ThermalBox &b = m_imageBoxes[idx][i];
+        ui->boxesList->addItem(tr("B%1: (%2,%3 %4x%5) avg %6C min %7C max %8C")
+                                   .arg(i + 1)
+                                   .arg(b.rect.x())
+                                   .arg(b.rect.y())
+                                   .arg(b.rect.width())
+                                   .arg(b.rect.height())
+                                   .arg(b.avgTemperature, 0, 'f', 1)
+                                   .arg(b.minTemperature, 0, 'f', 1)
+                                   .arg(b.maxTemperature, 0, 'f', 1));
+    }
+}
+
+void MainWindow::applyBoxesToView(int index)
+{
+    if (index < 0 || index >= m_imageBoxes.size())
+        return;
+    m_imageView->setBoxes(m_imageBoxes[index]);
 }
 
 QString MainWindow::suggestExportFileName(const ThermalDataModel &model) const
@@ -734,15 +999,24 @@ void MainWindow::saveCurrentViewPoints()
     }
 }
 
+void MainWindow::saveCurrentViewBoxes()
+{
+    int idx = ui->fileList->currentRow();
+    if (idx >= 0 && idx < m_imageBoxes.size()) {
+        m_imageBoxes[idx] = m_imageView->boxes();
+    }
+}
+
 void MainWindow::removeCurrentImage()
 {
     int idx = ui->fileList->currentRow();
     if (idx < 0 || idx >= m_models.size())
         return;
 
-    // Remove from data model, points, and cache.
+    // Remove from data model, points, boxes, and cache.
     m_models.removeAt(idx);
     m_imagePoints.removeAt(idx);
+    m_imageBoxes.removeAt(idx);
     m_thumbnailCache.clear();   // simple invalidation; indices changed
     m_currentModelIndex = -1;
 
@@ -753,6 +1027,7 @@ void MainWindow::removeCurrentImage()
         m_imageView->clear();
         ui->metadataTree->model()->removeRows(0, ui->metadataTree->model()->rowCount());
         ui->pointsList->clear();
+        ui->boxesList->clear();
         ui->minSpin->setEnabled(false);
         ui->maxSpin->setEnabled(false);
         ui->autoRangeButton->setEnabled(false);

@@ -2,6 +2,7 @@
 
 #include <QGraphicsEllipseItem>
 #include <QGraphicsLineItem>
+#include <QGraphicsRectItem>
 #include <QGraphicsTextItem>
 #include <QScrollBar>
 
@@ -53,6 +54,10 @@ ImageView::ImageView(QWidget *parent)
     m_crosshairV->setZValue(5);
     m_crosshairH->setVisible(false);
     m_crosshairV->setVisible(false);
+
+    m_activeBoxItem = m_scene->addRect(QRectF(), QPen(QColor(0, 255, 0), 2, Qt::DashLine), QBrush(QColor(0, 255, 0, 30)));
+    m_activeBoxItem->setZValue(14);
+    m_activeBoxItem->setVisible(false);
 }
 
 void ImageView::setThermalData(const ThermalDataModel &data)
@@ -60,6 +65,7 @@ void ImageView::setThermalData(const ThermalDataModel &data)
     m_data = data;
     updateOverlays();
     rebuildUserPointItems();
+    rebuildBoxItems();
     if (m_data.isValid()) {
         emit minMaxChanged(m_data.minTemperature(), m_data.maxTemperature());
     }
@@ -77,6 +83,7 @@ void ImageView::setRenderedImage(const QImage &image)
     m_scene->setSceneRect(image.rect());
     updateOverlays();
     rebuildUserPointItems();
+    rebuildBoxItems();
 }
 
 void ImageView::clear()
@@ -91,6 +98,7 @@ void ImageView::clear()
     m_crosshairH->setVisible(false);
     m_crosshairV->setVisible(false);
     clearUserPoints();
+    setBoxes(QList<ThermalBox>());
 }
 
 void ImageView::setShowMinMax(bool show)
@@ -106,6 +114,18 @@ void ImageView::setShowCrosshair(bool show)
         m_crosshairH->setVisible(false);
         m_crosshairV->setVisible(false);
     }
+}
+
+void ImageView::setBoxDrawingMode(bool enabled)
+{
+    m_boxDrawingMode = enabled;
+    setCursor(enabled ? Qt::CrossCursor : Qt::ArrowCursor);
+}
+
+void ImageView::setZoomRange(double minScale, double maxScale)
+{
+    m_minScale = minScale;
+    m_maxScale = maxScale;
 }
 
 void ImageView::addUserPoint(const QPoint &pixel)
@@ -138,14 +158,25 @@ void ImageView::clearUserPoints()
     emit userPointsChanged(m_userPoints);
 }
 
+void ImageView::setBoxes(const QList<ThermalBox> &boxes)
+{
+    m_boxes = boxes;
+    rebuildBoxItems();
+}
+
 void ImageView::wheelEvent(QWheelEvent *event)
 {
     const double scaleFactor = 1.15;
+    const double current = currentScale();
+    double target;
     if (event->angleDelta().y() > 0) {
-        scale(scaleFactor, scaleFactor);
+        target = current * scaleFactor;
     } else {
-        scale(1.0 / scaleFactor, 1.0 / scaleFactor);
+        target = current / scaleFactor;
     }
+    target = qBound(m_minScale, target, m_maxScale);
+    const double applied = target / current;
+    scale(applied, applied);
     event->accept();
 }
 
@@ -155,6 +186,15 @@ void ImageView::mousePressEvent(QMouseEvent *event)
         const QPointF scenePos = mapToScene(event->pos());
         emitPixelInfo(scenePos);
         QPoint px = imagePixelFromScene(scenePos);
+
+        if (m_boxDrawingMode && m_data.isValid()) {
+            m_drawingBox = true;
+            m_boxStartPixel = px;
+            m_activeBoxItem->setRect(QRectF(px.x(), px.y(), 0, 0));
+            m_activeBoxItem->setVisible(true);
+            return;
+        }
+
         if (m_data.isValid() && px.x() >= 0 && px.x() < m_data.width() && px.y() >= 0 && px.y() < m_data.height()) {
             addUserPoint(px);
             emit pixelClicked(px.x(), px.y(), m_data.temperatureAt(px.x(), px.y()));
@@ -179,6 +219,15 @@ void ImageView::mouseMoveEvent(QMouseEvent *event)
         m_crosshairV->setVisible(true);
     }
 
+    if (m_drawingBox && m_data.isValid()) {
+        QPoint px = imagePixelFromScene(scenePos);
+        px.setX(qBound(0, px.x(), m_data.width() - 1));
+        px.setY(qBound(0, px.y(), m_data.height() - 1));
+        QRect r = QRect(m_boxStartPixel, px).normalized();
+        m_activeBoxItem->setRect(QRectF(r));
+        return;
+    }
+
     if (m_panning) {
         const QPoint delta = event->pos() - m_lastPanPos;
         horizontalScrollBar()->setValue(horizontalScrollBar()->value() - delta.x());
@@ -191,9 +240,21 @@ void ImageView::mouseMoveEvent(QMouseEvent *event)
 
 void ImageView::mouseReleaseEvent(QMouseEvent *event)
 {
-    if (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton) {
+    if (event->button() == Qt::LeftButton && m_drawingBox) {
+        m_drawingBox = false;
+        m_activeBoxItem->setVisible(false);
+
+        const QPointF scenePos = mapToScene(event->pos());
+        QPoint px = imagePixelFromScene(scenePos);
+        px.setX(qBound(0, px.x(), m_data.width() - 1));
+        px.setY(qBound(0, px.y(), m_data.height() - 1));
+        QRect r = QRect(m_boxStartPixel, px).normalized();
+        if (r.width() > 0 && r.height() > 0) {
+            emit boxDrawn(r);
+        }
+    } else if (event->button() == Qt::MiddleButton || event->button() == Qt::RightButton) {
         m_panning = false;
-        unsetCursor();
+        setCursor(m_boxDrawingMode ? Qt::CrossCursor : Qt::ArrowCursor);
     }
     QGraphicsView::mouseReleaseEvent(event);
 }
@@ -249,7 +310,6 @@ void ImageView::emitPixelInfo(const QPointF &scenePos)
 
 void ImageView::rebuildUserPointItems()
 {
-    // Clean up old markers
     for (QGraphicsEllipseItem *item : std::as_const(m_userPointMarkers))
         m_scene->removeItem(item);
     for (QGraphicsTextItem *item : std::as_const(m_userPointLabels))
@@ -290,4 +350,55 @@ void ImageView::rebuildUserPointItems()
         m_scene->addItem(label);
         m_userPointLabels.append(label);
     }
+}
+
+void ImageView::rebuildBoxItems()
+{
+    for (QGraphicsRectItem *item : std::as_const(m_boxRectItems))
+        m_scene->removeItem(item);
+    for (QGraphicsTextItem *item : std::as_const(m_boxLabelItems))
+        m_scene->removeItem(item);
+    for (QGraphicsRectItem *item : std::as_const(m_boxRectItems))
+        delete item;
+    for (QGraphicsTextItem *item : std::as_const(m_boxLabelItems))
+        delete item;
+    m_boxRectItems.clear();
+    m_boxLabelItems.clear();
+
+    if (!m_data.isValid())
+        return;
+
+    QPen boxPen(QColor(0, 200, 0));
+    boxPen.setWidth(2);
+    QFont labelFont;
+    labelFont.setBold(true);
+    labelFont.setPointSize(9);
+
+    for (int i = 0; i < m_boxes.size(); ++i) {
+        const ThermalBox &b = m_boxes[i];
+        auto *rect = new QGraphicsRectItem(QRectF(b.rect));
+        rect->setPen(boxPen);
+        rect->setBrush(QBrush(QColor(0, 200, 0, 30)));
+        rect->setZValue(14);
+        m_scene->addItem(rect);
+        m_boxRectItems.append(rect);
+
+        auto *label = new QGraphicsTextItem(
+            QString("B%1: avg %2C, min %3C, max %4C")
+                .arg(i + 1)
+                .arg(b.avgTemperature, 0, 'f', 1)
+                .arg(b.minTemperature, 0, 'f', 1)
+                .arg(b.maxTemperature, 0, 'f', 1));
+        label->setDefaultTextColor(QColor(0, 200, 0));
+        label->setFont(labelFont);
+        label->setPos(b.rect.x() + 10, b.rect.y() - 25);
+        label->setZValue(15);
+        m_scene->addItem(label);
+        m_boxLabelItems.append(label);
+    }
+}
+
+double ImageView::currentScale() const
+{
+    return transform().m11();
 }

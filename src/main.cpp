@@ -14,6 +14,7 @@
 #include "MainWindow.h"
 #include "OverlayExporter.h"
 #include "PngTiffLoader.h"
+#include "ThermalBox.h"
 
 static int runHeadlessTest(const QString &path)
 {
@@ -107,7 +108,7 @@ int main(int argc, char *argv[])
         for (const ThermalDataModel &m : std::as_const(models)) {
             QString outPath = outDir.filePath(QFileInfo(m.fileName()).completeBaseName() + "_overlay.png");
             OverlayExporter::Result result = OverlayExporter::render(
-                m, ColorMap::IronBow, QList<QPoint>(), OverlayExporter::MinMaxMarkers);
+                m, ColorMap::IronBow, QList<QPoint>(), QList<ThermalBox>(), OverlayExporter::MinMaxMarkers);
             QString err = OverlayExporter::save(result, outPath);
             if (err.isEmpty()) {
                 qDebug().noquote() << "Exported:" << outPath;

@@ -8,6 +8,7 @@
 #include <QPointF>
 #include <QWheelEvent>
 
+#include "ThermalBox.h"
 #include "ThermalDataModel.h"
 
 /**
@@ -16,6 +17,7 @@
  * Features:
  *   - Pan and zoom with mouse wheel
  *   - Click to place persistent measurement points
+ *   - Draw measurement boxes
  *   - Overlay min/max markers
  *   - Optional crosshair / cursor position display
  */
@@ -33,16 +35,25 @@ public:
     void setShowMinMax(bool show);
     void setShowCrosshair(bool show);
 
+    void setBoxDrawingMode(bool enabled);
+    bool boxDrawingMode() const { return m_boxDrawingMode; }
+
+    void setZoomRange(double minScale, double maxScale);
+
     void addUserPoint(const QPoint &pixel);
     void removeLastUserPoint();
     void clearUserPoints();
     QList<QPoint> userPoints() const { return m_userPoints; }
+
+    void setBoxes(const QList<ThermalBox> &boxes);
+    QList<ThermalBox> boxes() const { return m_boxes; }
 
 signals:
     void pixelHovered(int x, int y, float temperature);
     void pixelClicked(int x, int y, float temperature);
     void minMaxChanged(float min, float max);
     void userPointsChanged(const QList<QPoint> &points);
+    void boxDrawn(const QRect &rect);
 
 protected:
     void wheelEvent(QWheelEvent *event) override;
@@ -55,6 +66,8 @@ private:
     QPoint imagePixelFromScene(const QPointF &scenePos) const;
     void emitPixelInfo(const QPointF &scenePos);
     void rebuildUserPointItems();
+    void rebuildBoxItems();
+    double currentScale() const;
 
     QGraphicsScene *m_scene = nullptr;
     QGraphicsPixmapItem *m_pixmapItem = nullptr;
@@ -72,9 +85,20 @@ private:
     bool m_panning = false;
     QPoint m_lastPanPos;
 
+    double m_minScale = 0.05;
+    double m_maxScale = 20.0;
+
     QList<QPoint> m_userPoints;
     QList<QGraphicsEllipseItem *> m_userPointMarkers;
     QList<QGraphicsTextItem *> m_userPointLabels;
+
+    bool m_boxDrawingMode = false;
+    bool m_drawingBox = false;
+    QPoint m_boxStartPixel;
+    QGraphicsRectItem *m_activeBoxItem = nullptr;
+    QList<ThermalBox> m_boxes;
+    QList<QGraphicsRectItem *> m_boxRectItems;
+    QList<QGraphicsTextItem *> m_boxLabelItems;
 };
 
 #endif // IMAGEVIEW_H

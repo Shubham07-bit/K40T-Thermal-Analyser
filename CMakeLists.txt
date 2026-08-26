@@ -79,10 +79,11 @@ set(HEADERS
     src/ColorMap.h
     src/ThermalImageLoader.h
     src/PngTiffLoader.h
-    src/DjiRjpgLoader.h
+    src/BlstIrLoader.h
     src/BatchProcessor.h
     src/OverlayExporter.h
     src/MatrixDialog.h
+    src/ThermalBox.h
 )
 
 if(WITH_BLST_SDK)

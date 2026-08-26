@@ -10,6 +10,7 @@
 #include "BatchProcessor.h"
 #include "ColorMap.h"
 #include "OverlayExporter.h"
+#include "ThermalBox.h"
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -27,20 +28,26 @@ public:
 
     void loadFile(const QString &filePath);
     void loadFiles(const QStringList &filePaths);
+    QStringList collectImageFiles(const QStringList &paths) const;
 
 private slots:
     void on_actionOpen_triggered();
+    void on_actionOpenFolder_triggered();
     void on_actionGenerateTestImage_triggered();
     void on_actionExit_triggered();
     void on_actionAbout_triggered();
+
     void on_actionZoomIn_triggered();
     void on_actionZoomOut_triggered();
     void on_actionResetZoom_triggered();
     void on_actionToggleMinMax_triggered();
     void on_actionToggleCrosshair_triggered();
+    void on_actionDrawBox_toggled(bool checked);
     void on_actionExport_triggered();
     void on_actionRemoveLastPoint_triggered();
     void on_actionClearPoints_triggered();
+    void on_actionRemoveLastBox_triggered();
+    void on_actionClearBoxes_triggered();
     void on_actionViewList_triggered();
     void on_actionViewGrid_triggered();
     void on_actionViewThumbnails_triggered();
@@ -52,6 +59,8 @@ private slots:
     void on_autoRangeButton_clicked();
     void on_clearPointsButton_clicked();
     void on_removeLastPointButton_clicked();
+    void on_clearBoxesButton_clicked();
+    void on_removeLastBoxButton_clicked();
     void on_viewMatrixButton_clicked();
     void on_fileList_customContextMenuRequested(const QPoint &pos);
 
@@ -61,9 +70,14 @@ private slots:
     void on_pixelClicked(int x, int y, float temperature);
     void on_minMaxChanged(float min, float max);
     void on_userPointsChanged(const QList<QPoint> &points);
+    void on_boxDrawn(const QRect &rect);
     void on_batchFileLoaded(int index, const ThermalDataModel &model);
     void on_batchFileFailed(const QString &path, const QString &reason);
     void on_batchFinished(int successCount, int failCount);
+
+protected:
+    void dragEnterEvent(QDragEnterEvent *event) override;
+    void dropEvent(QDropEvent *event) override;
 
 private:
     void setupUi();
@@ -72,14 +86,26 @@ private:
     void displayModel(int index);
     void updateMetadataPanel(const ThermalDataModel &data);
     void updatePointsList();
+    void updateBoxesList();
     void addLogMessage(const QString &msg);
     void generateSyntheticImage();
-    QString exportModel(const ThermalDataModel &model, const QList<QPoint> &points,
-                        const QString &outputPath, OverlayExporter::OverlayFlagSet flags);
+
+    ThermalBox computeBoxStats(const QRect &rect) const;
+    QString exportModel(const ThermalDataModel &model,
+                        const QList<QPoint> &points,
+                        const QList<ThermalBox> &boxes,
+                        const QString &outputPath,
+                        OverlayExporter::OverlayFlagSet flags);
+    QString writeCsv(const ThermalDataModel &model,
+                     const QList<QPoint> &points,
+                     const QList<ThermalBox> &boxes,
+                     const QString &csvPath);
     QString suggestExportFileName(const ThermalDataModel &model) const;
     QList<int> selectImagesForExport();
     void applyPointsToView(int index);
+    void applyBoxesToView(int index);
     void saveCurrentViewPoints();
+    void saveCurrentViewBoxes();
     void removeCurrentImage();
     QIcon createThumbnailIcon(const ThermalDataModel &model);
     QIcon thumbnailIconForIndex(int index);
@@ -94,6 +120,7 @@ private:
     QList<ThermalImageLoader *> m_ownedLoaders;
     QList<ThermalDataModel> m_models;
     QVector<QList<QPoint>> m_imagePoints;
+    QVector<QList<ThermalBox>> m_imageBoxes;
     int m_currentModelIndex = -1;
     QHash<QString, QIcon> m_thumbnailCache;
 

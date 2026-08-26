@@ -7,6 +7,7 @@
 #include <optional>
 
 #include "ColorMap.h"
+#include "ThermalBox.h"
 #include "ThermalDataModel.h"
 
 /**
@@ -46,6 +47,7 @@ public:
     static Result render(const ThermalDataModel &data,
                          ColorMap::Palette palette,
                          const QList<QPoint> &points,
+                         const QList<ThermalBox> &boxes,
                          OverlayFlagSet flags,
                          std::optional<float> min = std::nullopt,
                          std::optional<float> max = std::nullopt,
