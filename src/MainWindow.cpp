@@ -108,6 +108,10 @@ void MainWindow::setupUi()
 
     ui->pointsList->setSelectionMode(QAbstractItemView::SingleSelection);
 
+    // Hide measurement panels until there is something to show.
+    ui->pointsGroup->setVisible(false);
+    ui->boxesGroup->setVisible(false);
+
     // Default spin boxes disabled until data loaded
     ui->minSpin->setEnabled(false);
     ui->maxSpin->setEnabled(false);
