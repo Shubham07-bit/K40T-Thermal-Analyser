@@ -1,70 +1,33 @@
 image: stateoftheartio/qt6:6.8-gcc-aqt
 
+# Bitbucket Pipelines builds the Linux x86_64 binary.
+# Windows MSVC builds remain on GitHub Actions because the bundled
+# blstsdk64.lib is an MSVC static library and is not compatible with MinGW.
 pipelines:
   default:
-    - parallel:
-        - step:
-            name: Build Linux x86_64
-            image: stateoftheartio/qt6:6.8-gcc-aqt
-            caches:
-              - apt
-            script:
-              - sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev libudev-dev libgl-dev libvulkan-dev file
-              - qt-cmake . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-              - cmake --build build --config Release -j$(nproc)
-              - mkdir -p deploy
-              - cp build/thermal_analyzer deploy/thermal_analyzer
-              - chmod +x deploy/thermal_analyzer
-              - tar -czvf thermal_analyzer-linux-x86_64.tar.gz -C deploy thermal_analyzer
-            artifacts:
-              - thermal_analyzer-linux-x86_64.tar.gz
-        - step:
-            name: Build Windows x86_64 (MinGW cross-compile)
-            image: stateoftheartio/qt6:6.7-mingw-aqt
-            script:
-              # MinGW cannot link the bundled MSVC blstsdk64.lib, so K40T IR JPEG support
-              # is disabled for this Windows artifact. Provide a MinGW-compatible
-              # lib/windows-x86_64/libblstsdk64.a if you need K40T support here.
-              - qt-cmake . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-              - cmake --build build --config Release -j$(nproc)
-              - mkdir -p deploy
-              - cp build/thermal_analyzer.exe deploy/thermal_analyzer.exe
-              - windeployqt --dir deploy deploy/thermal_analyzer.exe
-              - sudo apt-get update && sudo apt-get install -y zip
-              - zip -r thermal_analyzer-windows-mingw-x86_64.zip deploy/*
-            artifacts:
-              - thermal_analyzer-windows-mingw-x86_64.zip
+    - step:
+        name: Build Linux x86_64
+        script:
+          - sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev libudev-dev libgl-dev libvulkan-dev file
+          - qt-cmake . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          - cmake --build build --config Release -j$(nproc)
+          - mkdir -p deploy
+          - cp build/thermal_analyzer deploy/thermal_analyzer
+          - chmod +x deploy/thermal_analyzer
+          - tar -czvf thermal_analyzer-linux-x86_64.tar.gz -C deploy thermal_analyzer
+        artifacts:
+          - thermal_analyzer-linux-x86_64.tar.gz
   branches:
     master:
-      - parallel:
-          - step:
-              name: Build Linux x86_64
-              image: stateoftheartio/qt6:6.8-gcc-aqt
-              caches:
-                - apt
-              script:
-                - sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev libudev-dev libgl-dev libvulkan-dev file
-                - qt-cmake . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-                - cmake --build build --config Release -j$(nproc)
-                - mkdir -p deploy
-                - cp build/thermal_analyzer deploy/thermal_analyzer
-                - chmod +x deploy/thermal_analyzer
-                - tar -czvf thermal_analyzer-linux-x86_64.tar.gz -C deploy thermal_analyzer
-              artifacts:
-                - thermal_analyzer-linux-x86_64.tar.gz
-          - step:
-              name: Build Windows x86_64 (MinGW cross-compile)
-              image: stateoftheartio/qt6:6.7-mingw-aqt
-              script:
-                # MinGW cannot link the bundled MSVC blstsdk64.lib, so K40T IR JPEG support
-                # is disabled for this Windows artifact. Provide a MinGW-compatible
-                # lib/windows-x86_64/libblstsdk64.a if you need K40T support here.
-                - qt-cmake . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
-                - cmake --build build --config Release -j$(nproc)
-                - mkdir -p deploy
-                - cp build/thermal_analyzer.exe deploy/thermal_analyzer.exe
-                - windeployqt --dir deploy deploy/thermal_analyzer.exe
-                - sudo apt-get update && sudo apt-get install -y zip
-                - zip -r thermal_analyzer-windows-mingw-x86_64.zip deploy/*
-              artifacts:
-                - thermal_analyzer-windows-mingw-x86_64.zip
+      - step:
+          name: Build Linux x86_64
+          script:
+            - sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev libudev-dev libgl-dev libvulkan-dev file
+            - qt-cmake . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+            - cmake --build build --config Release -j$(nproc)
+            - mkdir -p deploy
+            - cp build/thermal_analyzer deploy/thermal_analyzer
+            - chmod +x deploy/thermal_analyzer
+            - tar -czvf thermal_analyzer-linux-x86_64.tar.gz -C deploy thermal_analyzer
+          artifacts:
+            - thermal_analyzer-linux-x86_64.tar.gz
