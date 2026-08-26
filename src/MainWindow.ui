@@ -113,7 +113,7 @@
       <item>
        <widget class="QLabel" name="statusLabel">
         <property name="text">
-         <string>Left click to place a point. Right-drag or middle-drag to pan, wheel to zoom.</string>
+          <string>Left click to place a point. Hold B and drag to draw a box. Right-drag or middle-drag to pan, wheel to zoom.</string>
         </property>
        </widget>
       </item>
