@@ -78,20 +78,34 @@ OverlayExporter::Result OverlayExporter::render(const ThermalDataModel &data,
 
     // Measurement boxes are always drawn if any exist.
     if (!boxes.isEmpty()) {
-        QPen boxPen(QColor(0, 200, 0));
+        QPen boxPen(QColor(255, 215, 0));
         boxPen.setWidth(3);
         painter.setPen(boxPen);
-        painter.setBrush(QBrush(QColor(0, 200, 0, 40)));
+        painter.setBrush(QBrush(QColor(255, 215, 0, 20)));
+
+        QFont avgFont = painter.font();
+        avgFont.setPointSize(12);
+        painter.setFont(avgFont);
+
+        const int mr = 8;
+        QPen markerPen(Qt::black);
+        markerPen.setWidth(1);
 
         for (int i = 0; i < boxes.size(); ++i) {
             const ThermalBox &b = boxes[i];
             painter.drawRect(b.rect);
-            painter.drawText(b.rect.x() + 12, b.rect.y() - 8,
-                             QString("B%1: avg %2C, min %3C, max %4C")
-                                 .arg(i + 1)
-                                 .arg(b.avgTemperature, 0, 'f', 1)
-                                 .arg(b.minTemperature, 0, 'f', 1)
-                                 .arg(b.maxTemperature, 0, 'f', 1));
+
+            // Average value at the top-left inside the box.
+            painter.setPen(QColor(255, 215, 0));
+            painter.drawText(b.rect.x() + 6, b.rect.y() + 18,
+                             QString("avg %1C").arg(b.avgTemperature, 0, 'f', 1));
+
+            // Min/max markers inside the box (magenta / cyan to avoid global blue/red markers).
+            painter.setPen(markerPen);
+            painter.setBrush(QBrush(QColor(255, 0, 255)));
+            painter.drawEllipse(b.minPixel, mr / 2, mr / 2);
+            painter.setBrush(QBrush(QColor(0, 255, 255)));
+            painter.drawEllipse(b.maxPixel, mr / 2, mr / 2);
         }
     }
 
