@@ -241,19 +241,18 @@
      <height>22</height>
     </rect>
    </property>
-   <widget class="QMenu" name="menuFile">
-    <property name="title">
-     <string>File</string>
-    </property>
-    <addaction name="actionOpen"/>
-    <addaction name="actionOpenFolder"/>
-    <addaction name="separator"/>
-    <addaction name="actionExport"/>
-    <addaction name="separator"/>
-    <addaction name="actionGenerateTestImage"/>
-    <addaction name="separator"/>
-    <addaction name="actionExit"/>
-   </widget>
+    <widget class="QMenu" name="menuFile">
+     <property name="title">
+      <string>File</string>
+     </property>
+     <addaction name="actionOpen"/>
+     <addaction name="separator"/>
+     <addaction name="actionExport"/>
+     <addaction name="separator"/>
+     <addaction name="actionGenerateTestImage"/>
+     <addaction name="separator"/>
+     <addaction name="actionExit"/>
+    </widget>
     <widget class="QMenu" name="menuView">
      <property name="title">
       <string>View</string>
@@ -265,7 +264,6 @@
      <addaction name="actionToggleMinMax"/>
      <addaction name="actionToggleCrosshair"/>
      <addaction name="separator"/>
-     <addaction name="actionDrawBox"/>
      <addaction name="actionRemoveLastBox"/>
      <addaction name="actionClearBoxes"/>
      <addaction name="separator"/>
@@ -296,32 +294,23 @@
    <attribute name="toolBarBreak">
     <bool>false</bool>
    </attribute>
-   <addaction name="actionOpen"/>
-   <addaction name="actionOpenFolder"/>
-   <addaction name="separator"/>
-   <addaction name="actionExport"/>
+    <addaction name="actionOpen"/>
+    <addaction name="separator"/>
+    <addaction name="actionExport"/>
    <addaction name="separator"/>
    <addaction name="actionZoomIn"/>
    <addaction name="actionZoomOut"/>
    <addaction name="actionResetZoom"/>
   </widget>
-  <action name="actionOpen">
-   <property name="text">
-    <string>Open Images...</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+O</string>
-   </property>
-  </action>
-  <action name="actionOpenFolder">
-   <property name="text">
-    <string>Open Folder...</string>
-   </property>
-   <property name="shortcut">
-    <string>Ctrl+Shift+O</string>
-   </property>
-  </action>
-  <action name="actionExport">
+   <action name="actionOpen">
+    <property name="text">
+     <string>Open...</string>
+    </property>
+    <property name="shortcut">
+     <string>Ctrl+O</string>
+    </property>
+   </action>
+   <action name="actionExport">
    <property name="text">
     <string>Export with Overlays...</string>
    </property>
@@ -391,15 +380,7 @@
     <string>Clear All Points</string>
    </property>
   </action>
-  <action name="actionDrawBox">
-   <property name="text">
-    <string>Draw Box</string>
-   </property>
-   <property name="checkable">
-    <bool>true</bool>
-   </property>
-  </action>
-  <action name="actionRemoveLastBox">
+   <action name="actionRemoveLastBox">
    <property name="text">
     <string>Remove Last Box</string>
    </property>

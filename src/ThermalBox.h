@@ -12,6 +12,8 @@ struct ThermalBox
     float avgTemperature = 0.0f;
     float minTemperature = 0.0f;
     float maxTemperature = 0.0f;
+    QPoint minPixel;
+    QPoint maxPixel;
 };
 
 #endif // THERMALBOX_H

@@ -4,6 +4,7 @@
 #include <QGraphicsPixmapItem>
 #include <QGraphicsScene>
 #include <QGraphicsView>
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPointF>
 #include <QWheelEvent>
@@ -60,6 +61,8 @@ protected:
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
     void mouseReleaseEvent(QMouseEvent *event) override;
+    void keyPressEvent(QKeyEvent *event) override;
+    void keyReleaseEvent(QKeyEvent *event) override;
 
 private:
     void updateOverlays();
@@ -99,6 +102,8 @@ private:
     QList<ThermalBox> m_boxes;
     QList<QGraphicsRectItem *> m_boxRectItems;
     QList<QGraphicsTextItem *> m_boxLabelItems;
+    QList<QGraphicsEllipseItem *> m_boxMinMarkers;
+    QList<QGraphicsEllipseItem *> m_boxMaxMarkers;
 };
 
 #endif // IMAGEVIEW_H

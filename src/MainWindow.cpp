@@ -14,6 +14,7 @@
 #include <QFileInfo>
 #include <QHBoxLayout>
 #include <QHeaderView>
+#include <QLabel>
 #include <QListWidget>
 #include <QMenu>
 #include <QMessageBox>
@@ -214,23 +215,46 @@ void MainWindow::loadFiles(const QStringList &filePaths)
 
 void MainWindow::on_actionOpen_triggered()
 {
-    const QString filter = tr("Thermal Images (*.png *.tif *.tiff *.jpg *.jpeg);;All Files (*)");
-    const QStringList files = QFileDialog::getOpenFileNames(
-        this, tr("Open Images"), QString(), filter);
-    if (files.isEmpty())
+    QDialog dialog(this);
+    dialog.setWindowTitle(tr("Open"));
+    dialog.setMinimumWidth(300);
+    QVBoxLayout *layout = new QVBoxLayout(&dialog);
+    layout->addWidget(new QLabel(tr("Open thermal images or a folder containing images:"), &dialog));
+
+    QHBoxLayout *btnLayout = new QHBoxLayout();
+    QPushButton *filesButton = new QPushButton(tr("Open Image(s)..."), &dialog);
+    QPushButton *folderButton = new QPushButton(tr("Open Folder..."), &dialog);
+    QPushButton *cancelButton = new QPushButton(tr("Cancel"), &dialog);
+    btnLayout->addWidget(filesButton);
+    btnLayout->addWidget(folderButton);
+    btnLayout->addStretch();
+    btnLayout->addWidget(cancelButton);
+    layout->addLayout(btnLayout);
+
+    QStringList paths;
+    connect(filesButton, &QPushButton::clicked, &dialog, [&]() {
+        const QString filter = tr("Thermal Images (*.png *.tif *.tiff *.jpg *.jpeg);;All Files (*)");
+        const QStringList files = QFileDialog::getOpenFileNames(
+            &dialog, tr("Open Images"), QString(), filter);
+        if (!files.isEmpty()) {
+            paths = files;
+            dialog.accept();
+        }
+    });
+    connect(folderButton, &QPushButton::clicked, &dialog, [&]() {
+        const QString dir = QFileDialog::getExistingDirectory(
+            &dialog, tr("Open Folder with Images"));
+        if (!dir.isEmpty()) {
+            paths = QStringList() << dir;
+            dialog.accept();
+        }
+    });
+    connect(cancelButton, &QPushButton::clicked, &dialog, &QDialog::reject);
+
+    if (dialog.exec() != QDialog::Accepted || paths.isEmpty())
         return;
 
-    loadFiles(collectImageFiles(files));
-}
-
-void MainWindow::on_actionOpenFolder_triggered()
-{
-    const QString dir = QFileDialog::getExistingDirectory(
-        this, tr("Open Folder with Images"));
-    if (dir.isEmpty())
-        return;
-
-    loadFiles(collectImageFiles(QStringList() << dir));
+    loadFiles(collectImageFiles(paths));
 }
 
 void MainWindow::on_actionGenerateTestImage_triggered()
@@ -278,11 +302,6 @@ void MainWindow::on_actionToggleMinMax_triggered()
 void MainWindow::on_actionToggleCrosshair_triggered()
 {
     m_imageView->setShowCrosshair(ui->actionToggleCrosshair->isChecked());
-}
-
-void MainWindow::on_actionDrawBox_toggled(bool checked)
-{
-    m_imageView->setBoxDrawingMode(checked);
 }
 
 void MainWindow::on_actionRemoveLastBox_triggered()
@@ -654,13 +673,14 @@ void MainWindow::updateMetadataPanel(const ThermalDataModel &data)
 void MainWindow::updatePointsList()
 {
     ui->pointsList->clear();
-    const QList<QPoint> points = m_imageView->userPoints();
-
     int idx = ui->fileList->currentRow();
     const bool haveModel = (idx >= 0 && idx < m_models.size() && m_models[idx].isValid());
-    if (!haveModel)
+    if (!haveModel) {
+        ui->pointsGroup->setVisible(false);
         return;
+    }
 
+    const QList<QPoint> &points = m_imagePoints[idx];
     for (int i = 0; i < points.size(); ++i) {
         const QPoint p = points[i];
         float t = m_models[idx].temperatureAt(p.x(), p.y());
@@ -670,6 +690,7 @@ void MainWindow::updatePointsList()
                                     .arg(p.y())
                                     .arg(t, 0, 'f', 2));
     }
+    ui->pointsGroup->setVisible(!points.isEmpty());
 }
 
 void MainWindow::addLogMessage(const QString &msg)
@@ -758,14 +779,9 @@ QString MainWindow::writeCsv(const ThermalDataModel &model,
         return tr("Could not open %1 for writing").arg(csvPath);
 
     QTextStream out(&file);
-    out << "Image,Width,Height,Min_C,Max_C\n";
-    out << model.fileName() << ","
-        << model.width() << ","
-        << model.height() << ","
-        << QString::number(model.minTemperature(), 'f', 2) << ","
-        << QString::number(model.maxTemperature(), 'f', 2) << "\n";
-
-    out << "\nType,ID,X,Y,Width,Height,Avg_C,Min_C,Max_C\n";
+    out << "# For boxes, X,Y is the top-left corner of the box.\n";
+    out << "# For points, X,Y is the pixel coordinate.\n";
+    out << "Type,ID,X,Y,Width,Height,Avg_C,Min_C,Max_C\n";
 
     for (int i = 0; i < points.size(); ++i) {
         const QPoint p = points[i];
@@ -806,14 +822,16 @@ ThermalBox MainWindow::computeBoxStats(const QRect &rect) const
     double sum = 0.0;
     float minT = std::numeric_limits<float>::max();
     float maxT = std::numeric_limits<float>::lowest();
+    QPoint minP;
+    QPoint maxP;
     int count = 0;
 
     for (int y = r.top(); y <= r.bottom(); ++y) {
         for (int x = r.left(); x <= r.right(); ++x) {
             const float t = model.temperatureAt(x, y);
             sum += t;
-            if (t < minT) minT = t;
-            if (t > maxT) maxT = t;
+            if (t < minT) { minT = t; minP = QPoint(x, y); }
+            if (t > maxT) { maxT = t; maxP = QPoint(x, y); }
             ++count;
         }
     }
@@ -822,6 +840,8 @@ ThermalBox MainWindow::computeBoxStats(const QRect &rect) const
         box.avgTemperature = static_cast<float>(sum / count);
         box.minTemperature = minT;
         box.maxTemperature = maxT;
+        box.minPixel = minP;
+        box.maxPixel = maxP;
     }
 
     return box;
@@ -845,8 +865,10 @@ void MainWindow::updateBoxesList()
 {
     ui->boxesList->clear();
     int idx = ui->fileList->currentRow();
-    if (idx < 0 || idx >= m_imageBoxes.size())
+    if (idx < 0 || idx >= m_imageBoxes.size()) {
+        ui->boxesGroup->setVisible(false);
         return;
+    }
 
     for (int i = 0; i < m_imageBoxes[idx].size(); ++i) {
         const ThermalBox &b = m_imageBoxes[idx][i];
@@ -860,6 +882,7 @@ void MainWindow::updateBoxesList()
                                    .arg(b.minTemperature, 0, 'f', 1)
                                    .arg(b.maxTemperature, 0, 'f', 1));
     }
+    ui->boxesGroup->setVisible(!m_imageBoxes[idx].isEmpty());
 }
 
 void MainWindow::applyBoxesToView(int index)

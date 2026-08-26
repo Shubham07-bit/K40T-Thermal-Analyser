@@ -12,6 +12,7 @@ ImageView::ImageView(QWidget *parent)
     setDragMode(QGraphicsView::NoDrag);
     setTransformationAnchor(QGraphicsView::AnchorUnderMouse);
     setResizeAnchor(QGraphicsView::AnchorViewCenter);
+    setFocusPolicy(Qt::StrongFocus);
 
     m_scene = new QGraphicsScene(this);
     setScene(m_scene);
@@ -182,20 +183,25 @@ void ImageView::wheelEvent(QWheelEvent *event)
 
 void ImageView::mousePressEvent(QMouseEvent *event)
 {
+    setFocus();
+
     if (event->button() == Qt::LeftButton) {
         const QPointF scenePos = mapToScene(event->pos());
         emitPixelInfo(scenePos);
         QPoint px = imagePixelFromScene(scenePos);
+        const bool inside = m_data.isValid() && px.x() >= 0 && px.x() < m_data.width() && px.y() >= 0 && px.y() < m_data.height();
 
-        if (m_boxDrawingMode && m_data.isValid()) {
-            m_drawingBox = true;
-            m_boxStartPixel = px;
-            m_activeBoxItem->setRect(QRectF(px.x(), px.y(), 0, 0));
-            m_activeBoxItem->setVisible(true);
+        if (m_boxDrawingMode) {
+            if (inside) {
+                m_drawingBox = true;
+                m_boxStartPixel = px;
+                m_activeBoxItem->setRect(QRectF(px.x(), px.y(), 0, 0));
+                m_activeBoxItem->setVisible(true);
+            }
             return;
         }
 
-        if (m_data.isValid() && px.x() >= 0 && px.x() < m_data.width() && px.y() >= 0 && px.y() < m_data.height()) {
+        if (inside) {
             addUserPoint(px);
             emit pixelClicked(px.x(), px.y(), m_data.temperatureAt(px.x(), px.y()));
         }
@@ -257,6 +263,26 @@ void ImageView::mouseReleaseEvent(QMouseEvent *event)
         setCursor(m_boxDrawingMode ? Qt::CrossCursor : Qt::ArrowCursor);
     }
     QGraphicsView::mouseReleaseEvent(event);
+}
+
+void ImageView::keyPressEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_B) {
+        setBoxDrawingMode(true);
+        event->accept();
+        return;
+    }
+    QGraphicsView::keyPressEvent(event);
+}
+
+void ImageView::keyReleaseEvent(QKeyEvent *event)
+{
+    if (event->key() == Qt::Key_B) {
+        setBoxDrawingMode(false);
+        event->accept();
+        return;
+    }
+    QGraphicsView::keyReleaseEvent(event);
 }
 
 void ImageView::updateOverlays()
@@ -358,43 +384,74 @@ void ImageView::rebuildBoxItems()
         m_scene->removeItem(item);
     for (QGraphicsTextItem *item : std::as_const(m_boxLabelItems))
         m_scene->removeItem(item);
+    for (QGraphicsEllipseItem *item : std::as_const(m_boxMinMarkers))
+        m_scene->removeItem(item);
+    for (QGraphicsEllipseItem *item : std::as_const(m_boxMaxMarkers))
+        m_scene->removeItem(item);
     for (QGraphicsRectItem *item : std::as_const(m_boxRectItems))
         delete item;
     for (QGraphicsTextItem *item : std::as_const(m_boxLabelItems))
         delete item;
+    for (QGraphicsEllipseItem *item : std::as_const(m_boxMinMarkers))
+        delete item;
+    for (QGraphicsEllipseItem *item : std::as_const(m_boxMaxMarkers))
+        delete item;
     m_boxRectItems.clear();
     m_boxLabelItems.clear();
+    m_boxMinMarkers.clear();
+    m_boxMaxMarkers.clear();
 
     if (!m_data.isValid())
         return;
 
-    QPen boxPen(QColor(0, 200, 0));
+    // Gold/yellow for the box outline and average annotation.
+    // Magenta and cyan are used for min/max markers to avoid the global blue/red min/max markers.
+    QPen boxPen(QColor(255, 215, 0));
     boxPen.setWidth(2);
     QFont labelFont;
     labelFont.setBold(true);
     labelFont.setPointSize(9);
 
+    const int r = 6;
+    QPen markerPen(Qt::black);
+    markerPen.setWidth(1);
+
     for (int i = 0; i < m_boxes.size(); ++i) {
         const ThermalBox &b = m_boxes[i];
+
         auto *rect = new QGraphicsRectItem(QRectF(b.rect));
         rect->setPen(boxPen);
-        rect->setBrush(QBrush(QColor(0, 200, 0, 30)));
+        rect->setBrush(QBrush(QColor(255, 215, 0, 20)));
         rect->setZValue(14);
         m_scene->addItem(rect);
         m_boxRectItems.append(rect);
 
+        // Average temperature at the top-left of the box.
         auto *label = new QGraphicsTextItem(
-            QString("B%1: avg %2C, min %3C, max %4C")
-                .arg(i + 1)
-                .arg(b.avgTemperature, 0, 'f', 1)
-                .arg(b.minTemperature, 0, 'f', 1)
-                .arg(b.maxTemperature, 0, 'f', 1));
-        label->setDefaultTextColor(QColor(0, 200, 0));
+            QString("avg %1C").arg(b.avgTemperature, 0, 'f', 1));
+        label->setDefaultTextColor(QColor(255, 215, 0));
         label->setFont(labelFont);
-        label->setPos(b.rect.x() + 10, b.rect.y() - 25);
+        label->setPos(b.rect.x() + 4, b.rect.y() - 18);
         label->setZValue(15);
         m_scene->addItem(label);
         m_boxLabelItems.append(label);
+
+        // Min and max markers inside the box.
+        auto *minMarker = new QGraphicsEllipseItem(
+            b.minPixel.x() - r / 2, b.minPixel.y() - r / 2, r, r);
+        minMarker->setPen(markerPen);
+        minMarker->setBrush(QBrush(QColor(255, 0, 255)));   // magenta
+        minMarker->setZValue(16);
+        m_scene->addItem(minMarker);
+        m_boxMinMarkers.append(minMarker);
+
+        auto *maxMarker = new QGraphicsEllipseItem(
+            b.maxPixel.x() - r / 2, b.maxPixel.y() - r / 2, r, r);
+        maxMarker->setPen(markerPen);
+        maxMarker->setBrush(QBrush(QColor(0, 255, 255)));   // cyan
+        maxMarker->setZValue(16);
+        m_scene->addItem(maxMarker);
+        m_boxMaxMarkers.append(maxMarker);
     }
 }
 

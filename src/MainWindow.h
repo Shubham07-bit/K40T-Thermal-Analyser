@@ -32,7 +32,6 @@ public:
 
 private slots:
     void on_actionOpen_triggered();
-    void on_actionOpenFolder_triggered();
     void on_actionGenerateTestImage_triggered();
     void on_actionExit_triggered();
     void on_actionAbout_triggered();
@@ -42,7 +41,6 @@ private slots:
     void on_actionResetZoom_triggered();
     void on_actionToggleMinMax_triggered();
     void on_actionToggleCrosshair_triggered();
-    void on_actionDrawBox_toggled(bool checked);
     void on_actionExport_triggered();
     void on_actionRemoveLastPoint_triggered();
     void on_actionClearPoints_triggered();
