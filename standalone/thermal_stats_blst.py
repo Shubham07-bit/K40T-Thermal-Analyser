@@ -7,17 +7,27 @@ It loads a small C helper (libblst_ir_helper.so) that links against the bundled
 BLST SDK archive, then parses the proprietary temperature matrix stored inside
 BLST IR image files (e.g. *_I.jpg).
 
-Build the helper (run from this directory):
-    gcc -std=c99 -O2 -shared -fPIC \
-        -I../include \
-        blst_ir_helper.c \
-        ../lib/linux-x86_64/libblstsdk.a \
-        -o libblst_ir_helper.so -lm
+Build the helper:
+
+    Linux (run from this directory):
+        gcc -std=c99 -O2 -shared -fPIC \
+            -I../include \
+            blst_ir_helper.c \
+            ../lib/linux-x86_64/libblstsdk.a \
+            -o libblst_ir_helper.so -lm
+
+    Windows MSVC (from a Visual Studio Developer Command Prompt):
+        cl /O2 /W3 /D_USRDLL /D_WINDLL /I..\include \
+            blst_ir_helper.c \
+            ..\lib\windows-x86_64\blstsdk64.lib \
+            ws2_32.lib winmm.lib setupapi.lib \
+            /link /DLL /OUT:libblst_ir_helper.dll
 
 Usage:
     python3 thermal_stats_blst.py 19700101_001348_I.jpg
 
-The script looks for libblst_ir_helper.so in the same directory as this file.
+The script looks for libblst_ir_helper.so (Linux) or libblst_ir_helper.dll
+(Windows) in the same directory as this file.
 """
 
 import argparse

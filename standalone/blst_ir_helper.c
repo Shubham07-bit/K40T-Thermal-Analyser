@@ -5,15 +5,22 @@
  * shared library.  The static BLST SDK archive bundled in this repository is
  * linked into this helper.
  *
- * Build (run from this directory):
+ * Linux build (run from this directory):
  *     gcc -std=c99 -O2 -shared -fPIC \
  *         -I../include \
  *         blst_ir_helper.c \
  *         ../lib/linux-x86_64/libblstsdk.a \
  *         -o libblst_ir_helper.so -lm
  *
- * The resulting libblst_ir_helper.so must sit next to thermal_stats_blst.py,
- * or be on the system library search path.
+ * Windows MSVC build (from a Visual Studio Developer Command Prompt):
+ *     cl /O2 /W3 /D_USRDLL /D_WINDLL /I..\include \
+ *        blst_ir_helper.c \
+ *        ..\lib\windows-x86_64\blstsdk64.lib \
+ *        ws2_32.lib winmm.lib setupapi.lib \
+ *        /link /DLL /OUT:libblst_ir_helper.dll
+ *
+ * The resulting libblst_ir_helper.so / libblst_ir_helper.dll must sit next to
+ * thermal_stats_blst.py, or be on the system library search path.
  */
 
 #include <blst_ir_file.h>
